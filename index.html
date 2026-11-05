@@ -2,56 +2,958 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kinetic Test</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #050b14; color: #fff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .text { position: relative; z-index: 10; font-size: 24px; font-weight: bold; color: #ffd700; text-align: center; text-shadow: 0 0 10px rgba(255,215,0,0.8); padding: 20px; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE GREAT MIGRATION — Day 1</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #03090e;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+#stage {
+    position: relative;
+    width: min(100vw, 430px);
+    aspect-ratio: 9 / 16;
+    background: #06131d;
+    overflow: hidden;
+}
+
+canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+
+.controls {
+    position: absolute;
+    z-index: 10;
+    bottom: 22px;
+    left: 50%;
+    transform: translateX(-50%);
+}
+
+button {
+    padding: 12px 30px;
+    border: 1px solid rgba(0, 230, 255, .6);
+    border-radius: 30px;
+    color: #e7fbff;
+    background: rgba(0, 20, 32, .85);
+    font-size: 14px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    cursor: pointer;
+    box-shadow: 0 0 18px rgba(0, 210, 255, .2);
+}
+
+button:hover {
+    background: #063044;
+}
+
+@media (min-width: 600px) {
+    #stage {
+        width: min(430px, 90vw);
+    }
+}
+</style>
 </head>
+
 <body>
-    <canvas id="bg"></canvas>
-    <div class="text">DAY 1: THE OCEAN DIDN'T RISE.<br>THEY CAME UP.</div>
 
-    <script>
-        window.addEventListener('load', () => {
-            const canvas = document.getElementById('bg');
-            const ctx = canvas.getContext('2d');
-            
-            function resize() {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
+<div id="stage">
+    <canvas id="canvas" width="1080" height="1920"></canvas>
+
+    <div class="controls">
+        <button id="replay">↻ REPLAY</button>
+    </div>
+</div>
+
+<script>
+"use strict";
+
+/* ==========================================
+   THE GREAT MIGRATION
+   Procedural Canvas Animation Engine
+   ========================================== */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+const W = 1080;
+const H = 1920;
+
+const CONFIG = {
+    duration: 42000,
+    autoLoop: true,
+    reducedMotion: window.matchMedia(
+        "(prefers-reduced-motion: reduce)"
+    ).matches
+};
+
+let elapsed = 0;
+let lastTime = 0;
+let animationFrame;
+let paused = false;
+let replayFlash = 0;
+
+/* ==========================================
+   STORY TIMELINE
+   ========================================== */
+
+const scenes = [
+    {
+        start: 0,
+        end: 5,
+        lines: [
+            { text: "DAY 1", color: "white" },
+            { text: "OF THE GREAT", color: "white" },
+            { text: "MIGRATION.", color: "yellow" }
+        ],
+        subtitle: "THE WORLD WILL NEVER BE THE SAME."
+    },
+    {
+        start: 5,
+        end: 11,
+        lines: [
+            { text: "THE OCEAN", color: "white" },
+            { text: "DIDN'T RISE.", color: "yellow" }
+        ],
+        subtitle: "SOMETHING ELSE HAPPENED."
+    },
+    {
+        start: 11,
+        end: 19,
+        lines: [
+            { text: "THE DEEP", color: "white" },
+            { text: "DWELLERS", color: "yellow" },
+            { text: "CAME UP TO WALK.", color: "white" }
+        ],
+        subtitle: "THEY LEFT THEIR WORLD BELOW."
+    },
+    {
+        start: 19,
+        end: 28,
+        lines: [
+            { text: "AND THEY", color: "white" },
+            { text: "BROUGHT THE", color: "white" },
+            { text: "ABYSS WITH THEM.", color: "yellow" }
+        ],
+        subtitle: "THE SURFACE IS NO LONGER OURS."
+    },
+    {
+        start: 28,
+        end: 35,
+        lines: [
+            { text: "YOU HAVE", color: "white" },
+            { text: "99 DAYS", color: "yellow" },
+            { text: "LEFT.", color: "white" }
+        ],
+        subtitle: "SURVIVAL HAS JUST BEGUN."
+    },
+    {
+        start: 35,
+        end: 42,
+        lines: [
+            { text: "THE GREAT", color: "white" },
+            { text: "MIGRATION", color: "yellow" },
+            { text: "HAS BEGUN.", color: "white" }
+        ],
+        subtitle: "WHAT WILL HAPPEN ON DAY 2?"
+    }
+];
+
+/* ==========================================
+   RANDOM UTILITIES
+   ========================================== */
+
+function random(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+function clamp(v, min, max) {
+    return Math.max(min, Math.min(max, v));
+}
+
+function smooth(t) {
+    t = clamp(t, 0, 1);
+    return t * t * (3 - 2 * t);
+}
+
+function easeOut(t) {
+    return 1 - Math.pow(1 - clamp(t, 0, 1), 3);
+}
+
+/* ==========================================
+   PARTICLE GENERATION
+   ========================================== */
+
+const particles = Array.from({ length: 180 }, () => ({
+    x: random(0, W),
+    y: random(0, H),
+    size: random(1, 6),
+    speed: random(12, 65),
+    drift: random(-18, 18),
+    alpha: random(.15, .8),
+    phase: random(0, Math.PI * 2)
+}));
+
+const mistLayers = Array.from({ length: 7 }, (_, i) => ({
+    y: 500 + i * 210,
+    speed: random(5, 16),
+    alpha: random(.025, .075),
+    width: random(250, 500)
+}));
+
+/* ==========================================
+   BACKGROUND ATMOSPHERE
+   ========================================== */
+
+function drawBackground(t) {
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+
+    gradient.addColorStop(0, "#02080e");
+    gradient.addColorStop(.3, "#071c2a");
+    gradient.addColorStop(.65, "#0b2937");
+    gradient.addColorStop(1, "#02070b");
+
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, W, H);
+
+    // Distant cyan atmospheric glow
+
+    const glow = ctx.createRadialGradient(
+        W * .5, H * .43, 30,
+        W * .5, H * .43, 850
+    );
+
+    glow.addColorStop(0, "rgba(0,130,160,.20)");
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, H);
+
+    // Moving mist
+
+    mistLayers.forEach((m, i) => {
+
+        const x = (
+            Math.sin(t * .00012 * m.speed + i) * 350
+        ) + W * .5;
+
+        const g = ctx.createRadialGradient(
+            x, m.y, 10,
+            x, m.y, m.width
+        );
+
+        g.addColorStop(0, `rgba(100,180,190,${m.alpha})`);
+        g.addColorStop(1, "rgba(50,100,120,0)");
+
+        ctx.fillStyle = g;
+        ctx.fillRect(0, m.y - 250, W, 500);
+    });
+}
+
+/* ==========================================
+   FLOATING PLANKTON / SEA SPRAY
+   ========================================== */
+
+function drawParticles(t) {
+
+    particles.forEach(p => {
+
+        let y = (p.y - t * p.speed * .025) % H;
+
+        if (y < 0) y += H;
+
+        let x = p.x + Math.sin(
+            t * .0005 + p.phase
+        ) * p.drift;
+
+        const pulse = .65 + Math.sin(
+            t * .002 + p.phase
+        ) * .35;
+
+        ctx.beginPath();
+
+        ctx.arc(
+            x,
+            y,
+            p.size * pulse,
+            0,
+            Math.PI * 2
+        );
+
+        ctx.fillStyle = `rgba(75,235,255,${p.alpha * pulse})`;
+
+        ctx.shadowBlur = 18;
+        ctx.shadowColor = "#00eaff";
+        ctx.fill();
+
+        ctx.shadowBlur = 0;
+    });
+}
+
+/* ==========================================
+   PROCEDURAL RUINED CITY
+   ========================================== */
+
+const buildings = [];
+
+for (let i = 0; i < 19; i++) {
+
+    const width = random(80, 180);
+    const height = random(250, 700);
+
+    buildings.push({
+        x: i * 65 - 50,
+        width,
+        height,
+        seed: i * 17
+    });
+}
+
+function drawBuildings(t) {
+
+    buildings.forEach((b, index) => {
+
+        const baseY = 1440;
+
+        ctx.fillStyle = index % 2
+            ? "#071017"
+            : "#0b1820";
+
+        ctx.beginPath();
+
+        ctx.moveTo(b.x, baseY);
+        ctx.lineTo(b.x, baseY - b.height);
+
+        // Damaged roof
+
+        ctx.lineTo(b.x + b.width * .2, baseY - b.height - 30);
+        ctx.lineTo(b.x + b.width * .34, baseY - b.height + 8);
+        ctx.lineTo(b.x + b.width * .56, baseY - b.height - 45);
+        ctx.lineTo(b.x + b.width * .7, baseY - b.height + 15);
+        ctx.lineTo(b.x + b.width, baseY - b.height);
+
+        ctx.lineTo(b.x + b.width, baseY);
+        ctx.closePath();
+        ctx.fill();
+
+        // Broken windows
+
+        for (let row = 0; row < 9; row++) {
+
+            for (let col = 0; col < 3; col++) {
+
+                const wx = b.x + 15 + col * 35;
+                const wy = baseY - b.height + 55 + row * 55;
+
+                if (wx + 14 > b.x + b.width) continue;
+
+                const flicker = Math.sin(
+                    t * .004 + b.seed + row * col
+                );
+
+                ctx.fillStyle = flicker > .55
+                    ? "rgba(255,210,100,.5)"
+                    : "rgba(0,225,255,.09)";
+
+                ctx.fillRect(wx, wy, 13, 24);
             }
-            resize();
-            window.addEventListener('resize', resize);
+        }
+    });
 
-            let particles = Array.from({length: 40}, () => ({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                r: Math.random() * 3 + 1,
-                d: Math.random() * 1 + 0.5
-            }));
+    // Ground fog
 
-            function draw() {
-                ctx.fillStyle = 'rgba(5, 11, 20, 0.2)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                
-                ctx.fillStyle = '#00f3ff';
-                particles.forEach(p => {
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                    ctx.fill();
-                    p.y -= p.d;
-                    if(p.y < 0) p.y = canvas.height;
-                });
+    const fog = ctx.createLinearGradient(
+        0, 1200, 0, 1600
+    );
 
-                requestAnimationFrame(draw);
+    fog.addColorStop(0, "rgba(20,70,85,0)");
+    fog.addColorStop(1, "rgba(0,5,10,.9)");
+
+    ctx.fillStyle = fog;
+    ctx.fillRect(0, 1200, W, 500);
+}
+
+/* ==========================================
+   EMERGENCY STREETLIGHTS
+   ========================================== */
+
+function drawStreetlights(t) {
+
+    [125, 890].forEach((x, i) => {
+
+        const flicker = Math.sin(t * .008 + i * 3) > -.2;
+
+        ctx.strokeStyle = "#101d22";
+        ctx.lineWidth = 13;
+
+        ctx.beginPath();
+        ctx.moveTo(x, 1450);
+        ctx.lineTo(x, 1030);
+        ctx.lineTo(x + 90, 1030);
+        ctx.stroke();
+
+        if (flicker) {
+
+            const light = ctx.createRadialGradient(
+                x + 90, 1030, 2,
+                x + 90, 1030, 180
+            );
+
+            light.addColorStop(0, "rgba(255,200,100,.4)");
+            light.addColorStop(1, "rgba(255,150,30,0)");
+
+            ctx.fillStyle = light;
+            ctx.fillRect(x - 90, 940, 350, 350);
+
+            ctx.fillStyle = "#ffd98b";
+            ctx.fillRect(x + 75, 1018, 25, 12);
+        }
+    });
+}
+
+/* ==========================================
+   BIOLUMINESCENT EFFECT
+   ========================================== */
+
+function bioluminescence(x, y, radius, t) {
+
+    const pulse = .65 + Math.sin(t * .0025) * .35;
+
+    const g = ctx.createRadialGradient(
+        x, y, 1,
+        x, y, radius * pulse
+    );
+
+    g.addColorStop(0, "rgba(100,255,255,.9)");
+    g.addColorStop(.25, "rgba(0,230,255,.45)");
+    g.addColorStop(1, "rgba(0,180,255,0)");
+
+    ctx.fillStyle = g;
+
+    ctx.beginPath();
+    ctx.arc(x, y, radius * pulse, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+/* ==========================================
+   GIANT DEEP-SEA WHALE
+   ========================================== */
+
+function drawWhale(x, y, scale, t) {
+
+    ctx.save();
+
+    ctx.translate(x, y + Math.sin(t * .0005) * 25);
+    ctx.scale(scale, scale);
+
+    // Atmospheric shadow
+
+    ctx.fillStyle = "rgba(0,8,16,.8)";
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 310, 105, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Main whale body
+
+    const body = ctx.createLinearGradient(0, -90, 0, 100);
+    body.addColorStop(0, "#193b4a");
+    body.addColorStop(.5, "#071b27");
+    body.addColorStop(1, "#020b13");
+
+    ctx.fillStyle = body;
+
+    ctx.beginPath();
+    ctx.moveTo(-300, 0);
+    ctx.quadraticCurveTo(-180, -135, 70, -100);
+    ctx.quadraticCurveTo(260, -80, 310, 0);
+    ctx.quadraticCurveTo(200, 110, -70, 95);
+    ctx.quadraticCurveTo(-230, 75, -300, 0);
+    ctx.fill();
+
+    // Tail
+
+    ctx.beginPath();
+    ctx.moveTo(-275, 0);
+    ctx.lineTo(-370, -80);
+    ctx.lineTo(-345, 0);
+    ctx.lineTo(-370, 90);
+    ctx.closePath();
+    ctx.fill();
+
+    // Glowing markings
+
+    for (let i = 0; i < 9; i++) {
+        bioluminescence(
+            -120 + i * 42,
+            48 + Math.sin(i) * 10,
+            18,
+            t
+        );
+    }
+
+    // Eye
+
+    bioluminescence(235, -5, 35, t);
+
+    // Outline
+
+    ctx.strokeStyle = "rgba(80,220,240,.25)";
+    ctx.lineWidth = 4;
+    ctx.stroke();
+
+    ctx.restore();
+}
+
+/* ==========================================
+   COLOSSAL MANTA RAY
+   ========================================== */
+
+function drawManta(x, y, scale, t) {
+
+    ctx.save();
+
+    ctx.translate(x, y + Math.sin(t * .0007) * 30);
+    ctx.scale(scale, scale);
+
+    const flap = Math.sin(t * .0012) * 35;
+
+    ctx.fillStyle = "#071722";
+
+    ctx.beginPath();
+
+    ctx.moveTo(-300, 0);
+
+    ctx.quadraticCurveTo(
+        -220, -180 - flap,
+        0, -70
+    );
+
+    ctx.quadraticCurveTo(
+        220, -180 + flap,
+        300, 0
+    );
+
+    ctx.quadraticCurveTo(
+        170, 130,
+        0, 95
+    );
+
+    ctx.quadraticCurveTo(
+        -170, 130,
+        -300, 0
+    );
+
+    ctx.fill();
+
+    // Tail
+
+    ctx.beginPath();
+    ctx.moveTo(0, 75);
+    ctx.lineTo(0, 260);
+    ctx.lineTo(12, 260);
+    ctx.lineTo(10, 75);
+    ctx.fill();
+
+    // Cyan edge
+
+    ctx.strokeStyle = "rgba(0,220,255,.55)";
+    ctx.lineWidth = 5;
+    ctx.stroke();
+
+    bioluminescence(-210, -25, 65, t);
+    bioluminescence(210, -25, 65, t);
+    bioluminescence(0, 40, 50, t);
+
+    ctx.restore();
+}
+
+/* ==========================================
+   GIANT TENTACLED CREATURE
+   ========================================== */
+
+function drawTentacleCreature(x, y, scale, t) {
+
+    ctx.save();
+
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
+    // Main body
+
+    const body = ctx.createRadialGradient(
+        0, 0, 10,
+        0, 0, 180
+    );
+
+    body.addColorStop(0, "#183e4b");
+    body.addColorStop(1, "#020a11");
+
+    ctx.fillStyle = body;
+
+    ctx.beginPath();
+    ctx.ellipse(0, 0, 150, 115, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Tentacles
+
+    for (let i = 0; i < 8; i++) {
+
+        const angle = (Math.PI * 2 / 8) * i;
+
+        ctx.beginPath();
+
+        const sx = Math.cos(angle) * 100;
+        const sy = Math.sin(angle) * 75;
+
+        ctx.moveTo(sx, sy);
+
+        for (let j = 1; j <= 10; j++) {
+
+            const p = j / 10;
+
+            const wave = Math.sin(
+                t * .001 + i + p * 5
+            ) * 50 * p;
+
+            const px = sx + Math.cos(angle) * p * 270
+                + Math.cos(angle + Math.PI / 2) * wave;
+
+            const py = sy + Math.sin(angle) * p * 270
+                + Math.sin(angle + Math.PI / 2) * wave;
+
+            ctx.lineTo(px, py);
+        }
+
+        ctx.strokeStyle = "#102b38";
+        ctx.lineWidth = 22 - i;
+        ctx.lineCap = "round";
+        ctx.stroke();
+
+        // Glowing suction-cup accents
+
+        for (let j = 2; j < 9; j += 2) {
+
+            const p = j / 10;
+
+            const px = sx + Math.cos(angle) * p * 270;
+            const py = sy + Math.sin(angle) * p * 270;
+
+            bioluminescence(px, py, 13, t);
+        }
+    }
+
+    bioluminescence(0, 0, 90, t);
+
+    ctx.restore();
+}
+
+/* ==========================================
+   CREATURE WORLD ANIMATION
+   ========================================== */
+
+function drawCreatures(t) {
+
+    // Manta glides across the upper sky
+
+    drawManta(
+        450 + Math.sin(t * .00015) * 160,
+        410,
+        1.05,
+        t
+    );
+
+    // Giant whale
+
+    drawWhale(
+        760 + Math.sin(t * .0002) * 100,
+        750,
+        .95,
+        t
+    );
+
+    // Distant tentacled creature
+
+    ctx.globalAlpha = .8;
+
+    drawTentacleCreature(
+        200 + Math.sin(t * .00018) * 100,
+        900,
+        .8,
+        t
+    );
+
+    ctx.globalAlpha = 1;
+}
+
+/* ==========================================
+   CINEMATIC VIGNETTE
+   ========================================== */
+
+function drawVignette() {
+
+    const g = ctx.createRadialGradient(
+        W / 2, H / 2, 400,
+        W / 2, H / 2, 1100
+    );
+
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    g.addColorStop(1, "rgba(0,0,0,.7)");
+
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+}
+
+/* ==========================================
+   KINETIC TYPOGRAPHY
+   ========================================== */
+
+function drawTypography(t) {
+
+    const scene = scenes.find(s =>
+        t >= s.start && t < s.end
+    );
+
+    if (!scene) return;
+
+    const local = t - scene.start;
+    const duration = scene.end - scene.start;
+
+    const fadeIn = easeOut(local / 1.1);
+    const fadeOut = smooth(
+        1 - clamp((local - duration + 1) / 1, 0, 1)
+    );
+
+    const alpha = fadeIn * fadeOut;
+
+    const zoom = CONFIG.reducedMotion
+        ? 1
+        : 1.2 - .2 * easeOut(local / 1.8);
+
+    ctx.save();
+
+    ctx.globalAlpha = alpha;
+
+    ctx.translate(W / 2, 760);
+    ctx.scale(zoom, zoom);
+
+    const fontSize = 92;
+    const lineHeight = 118;
+
+    scene.lines.forEach((line, i) => {
+
+        const y = (i - (scene.lines.length - 1) / 2)
+            * lineHeight;
+
+        const isYellow = line.color === "yellow";
+
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.font = `900 ${fontSize}px Arial`;
+
+        ctx.shadowBlur = isYellow ? 45 : 18;
+
+        ctx.shadowColor = isYellow
+            ? "rgba(255,220,65,.75)"
+            : "rgba(0,210,255,.3)";
+
+        ctx.fillStyle = isYellow
+            ? "#ffe36a"
+            : "#f4faff";
+
+        ctx.fillText(line.text, 0, y);
+    });
+
+    ctx.restore();
+
+    // Subtitle
+
+    if (scene.subtitle) {
+
+        ctx.save();
+
+        ctx.globalAlpha = alpha * .85;
+
+        ctx.font = "bold 28px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        ctx.fillStyle = "#b7dce7";
+        ctx.shadowBlur = 15;
+        ctx.shadowColor = "#00aacc";
+
+        ctx.fillText(
+            scene.subtitle,
+            W / 2,
+            1110
+        );
+
+        ctx.restore();
+    }
+
+    // Small story label
+
+    ctx.save();
+
+    ctx.globalAlpha = .7 * alpha;
+
+    ctx.font = "bold 22px Arial";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#62c8dc";
+
+    ctx.fillText(
+        "THE GREAT MIGRATION  /  DAY 001",
+        W / 2,
+        220
+    );
+
+    ctx.restore();
+}
+
+/* ==========================================
+   CINEMATIC FLASH / TRANSITION
+   ========================================== */
+
+function drawTransitions(t) {
+
+    const boundaries = [5, 11, 19, 28, 35];
+
+    boundaries.forEach(sec => {
+
+        const distance = Math.abs(t - sec);
+
+        if (distance < .16) {
+
+            const intensity = 1 - distance / .16;
+
+            ctx.fillStyle = `rgba(120,225,255,${intensity * .15})`;
+            ctx.fillRect(0, 0, W, H);
+        }
+    });
+}
+
+/* ==========================================
+   FRAME RENDERER
+   ========================================== */
+
+function render(t) {
+
+    ctx.clearRect(0, 0, W, H);
+
+    drawBackground(t);
+
+    drawCreatures(t);
+
+    drawBuildings(t);
+
+    drawStreetlights(t);
+
+    drawParticles(t);
+
+    drawVignette();
+
+    drawTypography(t);
+
+    drawTransitions(t);
+
+    // Subtle cinematic grain
+
+    if (!CONFIG.reducedMotion) {
+
+        for (let i = 0; i < 45; i++) {
+
+            const x = (i * 193 + t * .04) % W;
+            const y = (i * 317 + t * .08) % H;
+
+            ctx.fillStyle = "rgba(255,255,255,.035)";
+            ctx.fillRect(x, y, 2, 2);
+        }
+    }
+
+    // Replay flash
+
+    if (replayFlash > 0) {
+
+        ctx.fillStyle = `rgba(100,230,255,${replayFlash})`;
+        ctx.fillRect(0, 0, W, H);
+
+        replayFlash *= .85;
+    }
+}
+
+/* ==========================================
+   ANIMATION LOOP
+   ========================================== */
+
+function animate(now) {
+
+    if (!lastTime) lastTime = now;
+
+    const delta = Math.min(now - lastTime, 50);
+    lastTime = now;
+
+    if (!paused) {
+
+        elapsed += delta;
+
+        if (elapsed >= CONFIG.duration) {
+
+            if (CONFIG.autoLoop) {
+                elapsed = 0;
+                replayFlash = .18;
+            } else {
+                elapsed = CONFIG.duration;
+                paused = true;
             }
-            draw();
-        });
-    </script>
+        }
+    }
+
+    render(elapsed);
+
+    animationFrame = requestAnimationFrame(animate);
+}
+
+/* ==========================================
+   REPLAY CONTROL
+   ========================================== */
+
+document.getElementById("replay").addEventListener(
+    "click",
+    () => {
+
+        elapsed = 0;
+        lastTime = 0;
+        paused = false;
+        replayFlash = .35;
+    }
+);
+
+/* ==========================================
+   START ENGINE
+   ========================================== */
+
+render(0);
+
+animationFrame = requestAnimationFrame(animate);
+
+</script>
+
 </body>
 </html>
